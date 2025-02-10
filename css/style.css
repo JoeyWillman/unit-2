@@ -1,1 +1,6 @@
-/*Add CSS styles here*/
+/* css/style.css */
+#mapid {
+    height: 600px;
+    width: 100%;
+  }
+  
