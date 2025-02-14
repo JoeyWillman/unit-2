@@ -1,7 +1,7 @@
-//sInitialize the map and set its initial view
+//Initialize the map and set its initial view
 var map = L.map('map').setView([39.8283, -98.5795], 5); // Centered on the United States
 
-//Add a tile layer to the map (OpenStreetMap tiles)
+//Add a tile layer to the map
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
   maxZoom: 19
@@ -15,45 +15,62 @@ function calcPropRadius(detectionDate) {
   const endDate = new Date('2025-02-12'); //End of the 6-week period
   const totalWeeks = 6;
 
-  //Parse the detectionDate
-  const detection = new Date(detectionDate); // Ensure it's in a valid date format
+  // Parse the detectionDate
+  const detection = new Date(detectionDate); //Ensure it's in a valid date format
   const weekDifference = Math.floor((detection - startDate) / (7 * 24 * 60 * 60 * 1000)); //Weeks since startDate
 
   //Scale radius proportionally between min and max based on weekDifference
   const radius = minRadius + ((maxRadius - minRadius) * (totalWeeks - weekDifference) / totalWeeks);
 
-  return Math.max(minRadius, Math.min(radius, maxRadius)); // Ensure radius stays within bounds
+  return Math.max(minRadius, Math.min(radius, maxRadius)); //Ensure radius stays within bounds
 }
 
-//Load the GeoJSON data
-fetch('data/hpai_cases_2025.geojson') // Path to the GeoJSON file
+//Function to create circle markers with proportional symbols and popups
+function pointToLayer(feature, latlng) {
+  // Marker options
+  var options = {
+    fillColor: "#ff7800",
+    color: "#000",
+    weight: 1,
+    opacity: 1,
+    fillOpacity: 0.8
+  };
+
+  //Calculate the radius based on the detection date
+  const detectionDate = feature.properties["Date Detected"];
+  options.radius = calcPropRadius(detectionDate);
+
+  //Create the circle marker layer
+  const layer = L.circleMarker(latlng, options);
+
+  //Build popup content
+  let popupContent = "<p><strong>State:</strong> " + feature.properties.State + "</p>";
+  popupContent += "<p><strong>County:</strong> " + feature.properties.County + "</p>";
+  popupContent += "<p><strong>Collection Date:</strong> " + feature.properties["Collection Date"] + "</p>";
+  popupContent += "<p><strong>Date Detected:</strong> " + detectionDate + "</p>";
+  popupContent += "<p><strong>HPAI Strain:</strong> " + feature.properties["HPAI Strain"] + "</p>";
+  popupContent += "<p><strong>Bird Species:</strong> " + feature.properties["Bird Species"] + "</p>";
+
+  //Bind popup with offset to avoid overlapping the symbol
+  layer.bindPopup(popupContent, {
+    offset: new L.Point(0, -options.radius)
+  });
+
+  return layer;
+}
+
+//Function to create proportional symbols and add them to the map
+function createPropSymbols(data, map) {
+  L.geoJson(data, {
+    pointToLayer: pointToLayer
+  }).addTo(map);
+}
+
+//Load the GeoJSON data and add to the map
+fetch('data/hpai_cases_2025.geojson')
   .then(response => response.json())
   .then(data => {
-    //Add the GeoJSON layer to the map
-    L.geoJson(data, {
-      //Define what happens for each feature
-      onEachFeature: function (feature, layer) {
-        let popupContent = "<h3>Avian Influenza Report</h3>";
-        for (let property in feature.properties) {
-          popupContent += `<p><strong>${property}:</strong> ${feature.properties[property]}</p>`;
-        }
-        layer.bindPopup(popupContent); //Bind the popup with relevant properties
-      },
-      //Style the markers as proportional circle markers
-      pointToLayer: function (feature, latlng) {
-        const detectionDate = feature.properties["Date Detected"]; //Date Detected field in the dataset
-        const radius = calcPropRadius(detectionDate); //Calculate radius based on detectionDate
-
-        return L.circleMarker(latlng, {
-          radius: radius,
-          fillColor: "#ff7800",
-          color: "#000",
-          weight: 1,
-          opacity: 1,
-          fillOpacity: 0.8
-        });
-      }
-    }).addTo(map);
+    createPropSymbols(data, map);
   })
   .catch(err => console.error("Error loading GeoJSON data: ", err));
 
@@ -66,8 +83,8 @@ legend.onAdd = function () {
   var minRadius = 5;
   var maxRadius = 20;
 
-  // Create legend content
-  div.innerHTML = '<h4>Detection Date</h4>';
+  //Create legend content
+  div.innerHTML = '<h4>Weekly Detections</h4>';
   for (var i = 0; i < weeks.length; i++) {
     var radius = minRadius + ((maxRadius - minRadius) * (weeks.length - i - 1) / weeks.length);
     div.innerHTML +=
